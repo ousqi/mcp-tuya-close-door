@@ -1,0 +1,33 @@
+{
+  "name": "@osqi/mcp-tuya-close-door",
+  "version": "0.1.1",
+  "description": "Local stdio MCP server for a confirmed Tuya roller-shutter close command.",
+  "type": "module",
+  "bin": {
+    "mcp-tuya-close-door": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    ".env.example"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "rm -rf .tmp/test-dist && npm run build && tsc -p tsconfig.test.json && node --test .tmp/test-dist/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "dotenv": "17.4.2",
+    "zod": "4.6.5",
+    "tuyapi": "7.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}
