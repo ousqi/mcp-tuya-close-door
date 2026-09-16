@@ -4,9 +4,9 @@
 
 `@osqi/mcp-tuya-close-door` 是 Node.js 20+、严格 TypeScript、ESM 的 stdio MCP 包。
 
-- 唯一公开 MCP 工具：`tuya_close_door`。
-- 仅通过局域网连接 Tuya 设备；不接入 Tuya Cloud、Home Assistant 或 Frigate。
-- 架构：`src/config.ts` 验证配置，`src/tuya-door-service.ts` 管理本地设备会话，`src/mcp.ts` 注册工具，`src/cli.ts` 启动 stdio transport。
+- 公开 MCP 工具：`tuya_close_door` 与 `frigate_latest_snapshot`。
+- Tuya 仅通过局域网连接；不接入 Tuya Cloud 或 Home Assistant。Frigate 仅允许固定配置的 HTTP(S) API、相机和本地快照目录；HTTP 只适用于可信局域网。
+- 架构：`src/config.ts` 验证配置，`src/tuya-door-service.ts` 管理本地设备会话，`src/frigate-client.ts` 获取并保存固定相机快照，`src/mcp.ts` 注册工具，`src/cli.ts` 启动 stdio transport。
 - 不要增加开门、停止、通用 DPS 写入或未经物理验证的控制功能。
 
 ## 物理门控安全规则
@@ -34,6 +34,8 @@ TUYA_PORT
 - `TUYA_LOCAL_KEY` 是敏感的 16 位密钥；在 `.env` 中必须加引号，避免 `#` 被 dotenv 解释为注释。
 - `.env`、`.npmrc`、密钥、证书、设备 ID、Local Key 和 LAN 地址不能提交、记录、打印或放入 MCP 错误消息。
 - MCP stdout 只能输出协议消息；诊断输出不得写入 stdout。
+- `FRIGATE_BASE_URL` 必须为不含认证信息的 HTTP(S) URL；`FRIGATE_CAMERA_NAME` 只能是一个安全路径段；`FRIGATE_SNAPSHOT_DIRECTORY` 必须为绝对路径。
+- Frigate token、URL 和图像内容不得记录、返回或放入 MCP 错误消息。快照工具只可 GET `/api/{camera}/latest.jpg`，验证 JPEG、限制响应大小，并仅返回保存的绝对路径和 UTC 捕获时间。
 
 ## 本地设备诊断
 
@@ -47,6 +49,7 @@ TUYA_PORT
 - 保持 `strict` TypeScript；用 `unknown`、类型守卫和显式接口替代 `any`。
 - 保持 `TuyaDeviceFactory` 依赖注入；单元测试必须 mock TuyAPI，绝不能接触真实设备。
 - 每个本地会话都必须处理 `error` 事件、脱敏错误，并在全部成功/失败路径断开连接。
+- Frigate 客户端必须保持依赖注入；测试只 mock HTTP、时钟和文件系统，绝不请求真实 Frigate。
 - 修改安全门控时覆盖：确认拒绝、缺失配置拒绝、DPS schema 拒绝、异步错误拒绝、错误脱敏和断开连接。
 
 运行验证：

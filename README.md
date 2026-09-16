@@ -1,16 +1,18 @@
 # @osqi/mcp-tuya-close-door
 
-本地运行的 stdio MCP 服务，仅提供一个经过安全确认的 Tuya 卷闸门关门接口。它直接通过局域网连接设备，不依赖 Tuya Cloud、Home Assistant 或 Frigate。
+本地运行的 stdio MCP 服务，提供经过安全确认的 Tuya 卷闸门关门接口，以及固定 Frigate 相机的最新快照保存接口。Tuya 直接通过局域网连接设备，不依赖 Tuya Cloud 或 Home Assistant。
 
 > Node.js 20+。此工具只代表本地设备接受了指令，不保证门已物理关闭；应由后续摄像头/视觉 skill 复核。
 
 ## 安全机制
 
-- 仅公开 `tuya_close_door` 一个 MCP 工具。
+- 仅公开 `tuya_close_door` 和只读的 `frigate_latest_snapshot`。
 - 每次调用必须传入 `{"confirmation": true}`。
 - 未同时配置并验证 `TUYA_CLOSE_DPS` 与 `TUYA_CLOSE_VALUE` 时，关门功能默认禁用。
 - 下发前会读取本地 DPS 状态；若配置的 DPS 不存在则拒绝执行。
 - 不要提交 `.env`，也不要在日志、提示词或 issue 中暴露设备 ID、Local Key 或局域网地址。
+- Frigate 只能使用不含认证信息的固定 HTTP(S) URL、固定相机名和固定绝对目录；HTTP 仅适用于可信局域网，调用者不能提供 URL、相机或文件路径。
+- 快照仅 GET `/api/{camera}/latest.jpg`，使用配置的 Bearer token，限制大小并验证 JPEG；只返回保存的绝对路径与 UTC 捕获时间，不返回图像、base64、URL 或 token。
 
 ## 安装
 
@@ -53,6 +55,11 @@ TUYA_PORT=6668
 # 仅在独立验证实际关门映射后填写：
 TUYA_CLOSE_DPS=6
 TUYA_CLOSE_VALUE=false
+
+FRIGATE_BASE_URL=https://frigate.example.test:8971
+FRIGATE_CAMERA_NAME=garage_door
+FRIGATE_TOKEN=你的FrigateBearerToken
+FRIGATE_SNAPSHOT_DIRECTORY=/var/lib/mcp-frigate-snapshots
 ```
 
 `TUYA_LOCAL_KEY` 必须加引号：若密钥包含 `#`，未加引号时 dotenv 会把后半部分当作注释。
@@ -66,6 +73,10 @@ TUYA_CLOSE_VALUE=false
 | `TUYA_PORT` | 是 | 设备端口，通常为 `6668`，范围为 `1–65535`。 |
 | `TUYA_CLOSE_DPS` | 否 | 经独立验证的关门 DPS 编号。须与 value 一起设置。 |
 | `TUYA_CLOSE_VALUE` | 否 | 对应关门值，必须是 JSON 标量，例如 `false`、`1` 或 `"close"`。 |
+| `FRIGATE_BASE_URL` | 是 | Frigate HTTP(S) 基础 URL；HTTPS 优先，可信局域网可用 HTTP；不得包含用户名、密码、查询或片段。 |
+| `FRIGATE_CAMERA_NAME` | 是 | 固定相机名；仅允许字母、数字、`_` 和 `-`。 |
+| `FRIGATE_TOKEN` | 是 | Frigate API Bearer token；不得公开。 |
+| `FRIGATE_SNAPSHOT_DIRECTORY` | 是 | 保存 JPEG 的固定绝对目录；服务会创建该目录。 |
 
 未确认 DPS 映射时，请不要填写最后两个变量。可使用仓库中未发布的 `scripts/inspect-tuya.mjs` 做只读检查，并在官方 App 中人工确认物理门与 DPS 的对应关系。
 
@@ -156,7 +167,11 @@ TUYA_CLOSE_VALUE='"close"'
         "TUYA_VERSION": "3.4",
         "TUYA_PORT": "6668",
         "TUYA_CLOSE_DPS": "6",
-        "TUYA_CLOSE_VALUE": "false"
+        "TUYA_CLOSE_VALUE": "false",
+        "FRIGATE_BASE_URL": "https://frigate.example.test:8971",
+        "FRIGATE_CAMERA_NAME": "garage_door",
+        "FRIGATE_TOKEN": "你的FrigateBearerToken",
+        "FRIGATE_SNAPSHOT_DIRECTORY": "/var/lib/mcp-frigate-snapshots"
       }
     }
   }
@@ -176,6 +191,16 @@ TUYA_CLOSE_VALUE='"close"'
 ```
 
 未传确认或非 `true` 值会被拒绝。命令接受成功仅表示本地 Tuya 设备接受请求；请用摄像头或其他独立方式验证门已关闭。
+
+### `frigate_latest_snapshot`
+
+不接受输入。它仅从配置的 Frigate 相机读取最新 JPEG，并将其以不会覆盖既有文件的生成名称写入配置的绝对目录。成功结果只含：
+
+```json
+{"path":"/var/lib/mcp-frigate-snapshots/frigate-...jpg","capturedAt":"2026-09-16T00:00:00.000Z"}
+```
+
+此工具不返回图像或 base64；使用独立视觉流程分析保存的文件。HTTPS 优先；可信局域网可使用 HTTP。Token、URL 和图像内容都不应放入日志或 MCP 消息。
 
 ## 开发与发布
 

@@ -1,7 +1,7 @@
 {
   "name": "@osqi/mcp-tuya-close-door",
   "version": "0.1.1",
-  "description": "Local stdio MCP server for a confirmed Tuya roller-shutter close command.",
+  "description": "Local stdio MCP server for a confirmed Tuya close command and fixed Frigate snapshots.",
   "type": "module",
   "bin": {
     "mcp-tuya-close-door": "./dist/cli.js"

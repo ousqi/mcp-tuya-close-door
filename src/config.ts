@@ -1,3 +1,5 @@
+import { isAbsolute, resolve } from "node:path"
+
 export interface Config {
   readonly tuya: {
     readonly deviceID: string
@@ -9,6 +11,12 @@ export interface Config {
       readonly dps: number
       readonly value: string | number | boolean
     }
+  }
+  readonly frigate: {
+    readonly baseUrl: string
+    readonly cameraName: string
+    readonly token: string
+    readonly snapshotDirectory: string
   }
 }
 
@@ -28,6 +36,13 @@ const REQUIRED = [
   "TUYA_HOST",
   "TUYA_VERSION",
   "TUYA_PORT",
+] as const
+
+const FRIGATE_REQUIRED = [
+  "FRIGATE_BASE_URL",
+  "FRIGATE_CAMERA_NAME",
+  "FRIGATE_TOKEN",
+  "FRIGATE_SNAPSHOT_DIRECTORY",
 ] as const
 
 function value(environment: NodeJS.ProcessEnv, name: string): string | undefined {
@@ -54,6 +69,28 @@ function host(input: string | undefined): string | undefined {
   } catch {
     return undefined
   }
+}
+
+function frigateUrl(input: string | undefined): string | undefined {
+  if (!input) return undefined
+
+  try {
+    const parsed = new URL(input)
+    if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+      return undefined
+    }
+    return parsed.toString()
+  } catch {
+    return undefined
+  }
+}
+
+function camera(input: string | undefined): string | undefined {
+  return input && /^[A-Za-z0-9_-]+$/.test(input) ? input : undefined
+}
+
+function directory(input: string | undefined): string | undefined {
+  return input && isAbsolute(input) ? resolve(input) : undefined
 }
 
 function json(input: string | undefined): unknown | undefined {
@@ -84,15 +121,26 @@ export function config(environment: NodeJS.ProcessEnv = process.env): Config {
   )
   const closeDps = number(value(environment, "TUYA_CLOSE_DPS"), (candidate) => Number.isInteger(candidate) && candidate >= 1)
   const closeValue = json(value(environment, "TUYA_CLOSE_VALUE"))
+  const frigateValues = Object.fromEntries(FRIGATE_REQUIRED.map((name) => [name, value(environment, name)])) as Record<
+    (typeof FRIGATE_REQUIRED)[number],
+    string | undefined
+  >
+  const frigateBaseUrl = frigateUrl(frigateValues.FRIGATE_BASE_URL)
+  const frigateCamera = camera(frigateValues.FRIGATE_CAMERA_NAME)
+  const snapshotDirectory = directory(frigateValues.FRIGATE_SNAPSHOT_DIRECTORY)
   const invalid = [
     ...REQUIRED.filter((name) => !values[name]),
     ...(tuyaHost ? [] : ["TUYA_HOST"]),
     ...(tuyaVersion === undefined ? ["TUYA_VERSION"] : []),
     ...(tuyaPort === undefined ? ["TUYA_PORT"] : []),
+    ...FRIGATE_REQUIRED.filter((name) => !frigateValues[name]),
+    ...(frigateBaseUrl ? [] : ["FRIGATE_BASE_URL"]),
+    ...(frigateCamera ? [] : ["FRIGATE_CAMERA_NAME"]),
+    ...(snapshotDirectory ? [] : ["FRIGATE_SNAPSHOT_DIRECTORY"]),
   ].filter((name, index, all) => all.indexOf(name) === index)
 
   if (invalid.length > 0) throw new ConfigurationError(invalid)
-  if (!tuyaHost || tuyaVersion === undefined || tuyaPort === undefined) {
+  if (!tuyaHost || tuyaVersion === undefined || tuyaPort === undefined || !frigateBaseUrl || !frigateCamera || !snapshotDirectory) {
     throw new ConfigurationError([])
   }
 
@@ -106,6 +154,12 @@ export function config(environment: NodeJS.ProcessEnv = process.env): Config {
       version: tuyaVersion,
       port: tuyaPort,
       ...(closeDps !== undefined && command(closeValue) ? { closeCommand: { dps: closeDps, value: closeValue } } : {}),
+    },
+    frigate: {
+      baseUrl: frigateBaseUrl,
+      cameraName: frigateCamera,
+      token: frigateValues.FRIGATE_TOKEN as string,
+      snapshotDirectory,
     },
   }
 }

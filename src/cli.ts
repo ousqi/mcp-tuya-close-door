@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { config as dotenv } from "dotenv"
 
 import { config } from "./config.js"
+import { createFrigateClient } from "./frigate-client.js"
 import { mcp } from "./mcp.js"
 import { createTuyaDoorService } from "./tuya-door-service.js"
 
@@ -12,6 +13,7 @@ async function main(): Promise<void> {
   const settings = config()
   const server = mcp({
     tuya: createTuyaDoorService(settings.tuya),
+    frigate: createFrigateClient(settings.frigate),
   })
   const transport = new StdioServerTransport()
 
